@@ -35,8 +35,6 @@ class MLP(nn.Module):
 
         self.to(device)
 
-        self.optimizer = optim.Adam(self.parameters(), lr=self.lr)
-
     def forward(self, state):
 
         x = self.fc1(state)

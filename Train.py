@@ -31,7 +31,8 @@ agents = [MADDPGAgent(f'Agent {i}',
                       args.update_every,
                       env.observation_space[i].shape,
                       (env.action_space[i].n,),
-                      n_agents, env.observation_space, env.action_space) for i in range(n_agents)]
+                      env.observation_space,
+                      env.action_space) for i in range(n_agents)]
 
 if args.load_dir is not "":
     for agent in agents:
@@ -42,7 +43,7 @@ if args.port > 0:
     viz = visdom.Visdom(port=args.port)
 
 update_counter = 1
-noise_processes = [OrnsteinUhlenbeckActionNoise(np.zeros(agents[i].act_shape,)) for i in range(len(agents))]
+noise_processes = [OrnsteinUhlenbeckActionNoise(np.zeros(agents[i].act_shape)) for i in range(len(agents))]
 
 for episode in range(args.num_episodes):
     obs = env.reset()
