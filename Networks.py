@@ -1,13 +1,11 @@
+import numpy as np
 import torch as T
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
-import numpy as np
 
 
 class MLP(nn.Module):
     def __init__(self, lr, input_shape, output_shape, activation, device, num_units):
-
         super(MLP, self).__init__()
         self.lr = lr
         self.input_shape = input_shape
@@ -36,7 +34,6 @@ class MLP(nn.Module):
         self.to(device)
 
     def forward(self, state):
-
         x = self.fc1(state)
         x = F.relu(x)
         x = self.fc2(x)
@@ -44,5 +41,3 @@ class MLP(nn.Module):
         x = self.activation(self.mu(x))
 
         return x
-
-

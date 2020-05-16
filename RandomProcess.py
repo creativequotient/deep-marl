@@ -8,6 +8,7 @@ class ActionNoise(object):
     """
     The action noise base class
     """
+
     def reset(self):
         """
         call end of episode reset for the noise
@@ -21,6 +22,7 @@ class NormalActionNoise(ActionNoise):
     :param mean: (float) the mean value of the noise
     :param sigma: (float) the scale of the noise (std here)
     """
+
     def __init__(self, mean, sigma, size):
         self._size = size
         self._mu = mean

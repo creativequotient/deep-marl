@@ -1,14 +1,16 @@
+import os
+
+import numpy as np
 import torch as T
 import torch.optim as optim
-import numpy as np
+
 from ReplayBuffer import ReplayBuffer
-import os
-from Common import gumbel_softmax, onehot_from_logits
 
 
 class MADDPGAgent(object):
 
-    def __init__(self, id, local_q, model, num_units, lr, gamma, tau, batch_size, min_replay_size, replay_buffer_size, update_interval, obs_shape, act_shape, global_observation_shape, global_action_shape):
+    def __init__(self, id, local_q, model, num_units, lr, gamma, tau, batch_size, min_replay_size, replay_buffer_size,
+                 update_interval, obs_shape, act_shape, global_observation_shape, global_action_shape):
 
         # Metadata
         self.id = id
@@ -17,7 +19,8 @@ class MADDPGAgent(object):
         # ReplayBuffer
         self.min_replay_size = min_replay_size
         self.replay_buffer_size = replay_buffer_size
-        self.replay_buffer = ReplayBuffer(max_capacity=self.replay_buffer_size, obs_shape=obs_shape, act_shape=act_shape)
+        self.replay_buffer = ReplayBuffer(max_capacity=self.replay_buffer_size, obs_shape=obs_shape,
+                                          act_shape=act_shape)
 
         # Training parameters
         self.update_interval = update_interval
@@ -37,7 +40,8 @@ class MADDPGAgent(object):
         if self.local_q:
             input_shape = sum(self.obs_shape + self.act_shape)
         else:
-            input_shape = sum(map(lambda x: x.shape[0], global_observation_shape)) + sum(map(lambda x: x.n, global_action_shape))
+            input_shape = sum(map(lambda x: x.shape[0], global_observation_shape)) + sum(
+                map(lambda x: x.n, global_action_shape))
         self.q = model(self.lr, (input_shape,), (1,), lambda x: x, self.device, num_units)
         self.q_target = model(self.lr, (input_shape,), (1,), lambda x: x, self.device, num_units)
         self.q_optimizer = optim.Adam(self.q.parameters(), lr=self.lr)
@@ -87,7 +91,8 @@ class MADDPGAgent(object):
         global_new_obs = []
         global_target_actions = []
         for agent in agents:
-            o, a, r, o_, d = list(map(lambda x: T.tensor(x, dtype=T.float32, device=self.device), agent.get_experience(sampled_idx)))
+            o, a, r, o_, d = list(
+                map(lambda x: T.tensor(x, dtype=T.float32, device=self.device), agent.get_experience(sampled_idx)))
             global_obs.append(o)
             global_actions.append(a)
             global_new_obs.append(o_)
@@ -100,12 +105,12 @@ class MADDPGAgent(object):
         global_target_actions = T.cat(global_target_actions, 1)
 
         # Calculate target, actual Qs
-        q_input = T.cat([global_new_obs,global_target_actions], 1)
+        q_input = T.cat([global_new_obs, global_target_actions], 1)
         _, _, rew, _, done = self.get_experience(sampled_idx)
         rew, done = list(map(lambda x: T.tensor(x, dtype=T.float32, device=self.device), [rew, done]))
         actual = rew + self.gamma * (1 - done) * self.q_target(q_input)
         # Calculate predicted Qs
-        q_input = T.cat([global_obs,global_actions], 1)
+        q_input = T.cat([global_obs, global_actions], 1)
         predicted = self.q(q_input)
         # Compute loss
         loss = T.mean(T.pow(actual - predicted, 2))
@@ -128,7 +133,7 @@ class MADDPGAgent(object):
         self.soft_update(self.tau)
 
         return info
-    
+
     def save_agent(self, save_path):
         if not os.path.exists(save_path):
             os.mkdir(save_path)

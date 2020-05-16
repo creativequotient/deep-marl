@@ -1,8 +1,10 @@
 import argparse
+
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
-import numpy as np
+
 
 def parse_args():
     parser = argparse.ArgumentParser("Reinforcement Learning experiments for multiagent environments")
@@ -26,16 +28,21 @@ def parse_args():
     parser.add_argument("--local-q", action="store_true", default=False)
     # Checkpointing
     parser.add_argument("--exp-name", type=str, default=None, help="name of the experiment")
-    parser.add_argument("--save-dir", type=str, default="/tmp/policy/", help="directory in which training state and model should be saved")
-    parser.add_argument("--save-rate", type=int, default=1000, help="save model once every time this many episodes are completed")
-    parser.add_argument("--load-dir", type=str, default="", help="directory in which training state and model are loaded")
+    parser.add_argument("--save-dir", type=str, default="/tmp/policy/",
+                        help="directory in which training state and model should be saved")
+    parser.add_argument("--save-rate", type=int, default=1000,
+                        help="save model once every time this many episodes are completed")
+    parser.add_argument("--load-dir", type=str, default="",
+                        help="directory in which training state and model are loaded")
     # Evaluation
     parser.add_argument("--restore", action="store_true", default=False)
     parser.add_argument("--display", action="store_true", default=False)
     parser.add_argument("--benchmark", action="store_true", default=False)
     parser.add_argument("--benchmark-iters", type=int, default=100000, help="number of iterations run for benchmarking")
-    parser.add_argument("--benchmark-dir", type=str, default="./benchmark_files/", help="directory where benchmark data is saved")
-    parser.add_argument("--plots-dir", type=str, default="./learning_curves/", help="directory where plot data is saved")
+    parser.add_argument("--benchmark-dir", type=str, default="./benchmark_files/",
+                        help="directory where benchmark data is saved")
+    parser.add_argument("--plots-dir", type=str, default="./learning_curves/",
+                        help="directory where plot data is saved")
 
     return parser.parse_args()
 
@@ -55,6 +62,7 @@ def make_env(scenario_name, benchmark=False):
         env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation)
     return env
 
+
 def onehot_from_logits(logits, eps=0.0):
     """
     Given batch of logits, return one-hot sample using epsilon greedy strategy
@@ -66,22 +74,28 @@ def onehot_from_logits(logits, eps=0.0):
         return argmax_acs
     # get random actions in one-hot form
     rand_acs = Variable(torch.eye(logits.shape[1])[[np.random.choice(
-        range(logits.shape[1]), size=logits.shape[0])]], requires_grad=False).to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+        range(logits.shape[1]), size=logits.shape[0])]], requires_grad=False).to(
+        torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
     # chooses between best and random actions using epsilon greedy
     return torch.stack([argmax_acs[i] if r > eps else rand_acs[i] for i, r in
-                        enumerate(torch.rand(logits.shape[0]))]).to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+                        enumerate(torch.rand(logits.shape[0]))]).to(
+        torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+
 
 # modified for PyTorch from https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
 def sample_gumbel(shape, eps=1e-20, tens_type=torch.FloatTensor):
     """Sample from Gumbel(0, 1)"""
-    U = Variable(tens_type(*shape).uniform_(), requires_grad=False).to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+    U = Variable(tens_type(*shape).uniform_(), requires_grad=False).to(
+        torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
     return -torch.log(-torch.log(U + eps) + eps)
+
 
 # modified for PyTorch from https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
 def gumbel_softmax_sample(logits, temperature):
     """ Draw a sample from the Gumbel-Softmax distribution"""
     y = logits + sample_gumbel(logits.shape, tens_type=type(logits.data))
     return F.softmax(y / temperature, dim=1)
+
 
 # modified for PyTorch from https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
 def gumbel_softmax(logits, temperature=1.0, hard=False):

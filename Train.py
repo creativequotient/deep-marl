@@ -1,12 +1,13 @@
-from Agents import MADDPGAgent
-from Networks import MLP
-import numpy as np
-from RandomProcess import OrnsteinUhlenbeckActionNoise
-import visdom
 import os
 import time
-from Common import parse_args, make_env
 
+import numpy as np
+import visdom
+
+from Agents import MADDPGAgent
+from Common import parse_args, make_env
+from Networks import MLP
+from RandomProcess import OrnsteinUhlenbeckActionNoise
 
 args = parse_args()
 
@@ -52,7 +53,8 @@ for episode in range(args.num_episodes):
     for process in noise_processes:
         process.reset()
     for t in range(args.max_episode_len):
-        actions = [agents[i].get_action(obs[i])[0].cpu().detach().numpy() + noise_processes[i]() for i in range(len(agents))]
+        actions = [agents[i].get_action(obs[i])[0].cpu().detach().numpy() + noise_processes[i]() for i in
+                   range(len(agents))]
         new_obs, rew, done, info = env.step(actions)
         for i, agent in enumerate(agents):
             agent.experience(obs[i], actions[i], rew[i], new_obs[i], done[i])
@@ -78,9 +80,9 @@ for episode in range(args.num_episodes):
             X=[episode],
             Y=[np.sum(overall_reward)],
             win='Reward',
-            update = 'append',
-            name = 'Training',
-            opts = dict(title='Rewards', linecolor=np.array((0,255,0)).reshape(1,-1)))
+            update='append',
+            name='Training',
+            opts=dict(title='Rewards', linecolor=np.array((0, 255, 0)).reshape(1, -1)))
         for agent_id in visdom_info:
             viz.line(
                 X=[episode],
@@ -88,14 +90,14 @@ for episode in range(args.num_episodes):
                 win=agent_id,
                 name='Q-loss',
                 update='append',
-                opts=dict(title=f'{agent_id}', linecolor=np.array((0,255,0)).reshape(1,-1)))
+                opts=dict(title=f'{agent_id}', linecolor=np.array((0, 255, 0)).reshape(1, -1)))
             viz.line(
                 X=[episode],
                 Y=[np.average(visdom_info[agent_id]['pi_loss'])],
                 win=agent_id,
                 name='pi-loss',
                 update='append',
-                opts=dict(title=f'{agent_id}', linecolor=np.array((255,0,0)).reshape(1,-1)))
+                opts=dict(title=f'{agent_id}', linecolor=np.array((255, 0, 0)).reshape(1, -1)))
     if episode % args.eval_every == 0 and episode != 0:
         eval_rewards = []
         for eval_episode in range(10):

@@ -7,6 +7,7 @@ def simple_spread_reward(agent, world):
         dist = np.sqrt(np.sum(np.square(delta_pos)))
         dist_min = agent1.size + agent2.size
         return True if dist < dist_min else False
+
     # Agents are rewarded based on minimum agent distance to each landmark, penalized for collisions
     rew = 0
     for l in world.landmarks:
