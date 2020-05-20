@@ -2,19 +2,26 @@ import os
 
 import numpy as np
 import torch as T
+import torch.nn as nn
 import torch.optim as optim
+from torch.nn.functional import gumbel_softmax
 
+from RandomProcess import OrnsteinUhlenbeckActionNoise
 from ReplayBuffer import ReplayBuffer
+from Common import onehot_from_logits
+
+MSELoss = nn.MSELoss()
 
 
 class MADDPGAgent(object):
 
     def __init__(self, id, local_q, model, num_units, lr, gamma, tau, batch_size, min_replay_size, replay_buffer_size,
-                 update_interval, obs_shape, act_shape, global_observation_shape, global_action_shape):
+                 update_interval, obs_shape, act_shape, discrete, global_observation_shape, global_action_shape):
 
         # Metadata
         self.id = id
         self.device = T.device('cuda' if T.cuda.is_available() else 'cpu')
+        self.discrete = discrete
 
         # ReplayBuffer
         self.min_replay_size = min_replay_size
@@ -32,9 +39,19 @@ class MADDPGAgent(object):
         self.obs_shape = obs_shape
         self.act_shape = act_shape
 
+        # Noise params
+        if not self.discrete:
+            self.noise = OrnsteinUhlenbeckActionNoise(np.zeros(act_shape, dtype=np.float))
+        else:
+            self.noise = 0.5
+
         # Networks
-        self.pi = model(self.lr, self.obs_shape, self.act_shape, T.tanh, self.device, num_units)
-        self.pi_target = model(self.lr, self.obs_shape, self.act_shape, T.tanh, self.device, num_units)
+        self.pi = model(self.lr, self.obs_shape, self.act_shape,
+                        self.discrete, True, self.device,
+                        num_units)
+        self.pi_target = model(self.lr, self.obs_shape, self.act_shape,
+                        self.discrete, True, self.device,
+                        num_units)
         self.pi_optimizer = optim.Adam(self.pi.parameters(), lr=self.lr)
 
         if self.local_q:
@@ -42,24 +59,46 @@ class MADDPGAgent(object):
         else:
             input_shape = sum(map(lambda x: x.shape[0], global_observation_shape)) + sum(
                 map(lambda x: x.n, global_action_shape))
-        self.q = model(self.lr, (input_shape,), (1,), lambda x: x, self.device, num_units)
-        self.q_target = model(self.lr, (input_shape,), (1,), lambda x: x, self.device, num_units)
+        self.q = model(self.lr, (input_shape,), (1,), self.discrete, False, self.device, num_units)
+        self.q_target = model(self.lr, (input_shape,), (1,), self.discrete, False, self.device, num_units)
         self.q_optimizer = optim.Adam(self.q.parameters(), lr=self.lr)
 
-        self.soft_update(1.0)
+        self.hard_update()
+
+        self.prep_rollouts()
+
+        print(f"Agent ID: {self.id}")
+        print(f"Discrete: {self.discrete}")
+        print(f"Tau: {self.tau}")
+        print(f"LR: {self.lr}")
+        print(f"Gamma: {self.gamma}")
+        print(f"Batch size: {self.batch_size}")
+        print(f"Device: {self.device}")
 
     def experience(self, obs, act, rew, new_obs, done):
         self.replay_buffer.add(obs, act, rew, new_obs, done)
 
-    def get_action(self, obs):
-        if type(obs) == np.ndarray:
-            obs = T.tensor(obs, dtype=T.float32).unsqueeze(0).to(self.device)
-        return self.pi(obs)
+    def reset_noise(self):
+        if self.discrete:
+            self.noise = self.noise * 0.9995
+        if not self.discrete:
+            self.noise.reset()
 
-    def get_target_action(self, obs):
+    def get_action(self, obs, noise=False):
         if type(obs) == np.ndarray:
-            obs = T.tensor(obs, dtype=T.float32).unsqueeze(0).to(self.device)
-        return self.pi_target(obs)
+            obs = T.tensor(obs, dtype=T.float32, device=self.device).unsqueeze(0)
+        with T.no_grad():
+            if not self.discrete:
+                action = self.pi(obs)
+                if noise:
+                    action += T.tensor(self.noise(), dtype=T.float32, device=self.device).unsqueeze(0)
+                return action.clamp(-1, 1)
+            else:
+                logits = self.pi(obs)
+                if noise:
+                    return gumbel_softmax(logits, tau=self.tau, hard=True)
+                else:
+                    return onehot_from_logits(logits)
 
     def get_experience(self, idx):
         return self.replay_buffer.get_experience(idx)
@@ -72,9 +111,13 @@ class MADDPGAgent(object):
             for q_param, target_q_param in zip(self.q.parameters(), self.q_target.parameters()):
                 target_q_param.data = amount * q_param.data + (1 - amount) * target_q_param.data
 
-    def update(self, agents, t):
+    def hard_update(self):
+        self.soft_update(1.0)
+
+    def update(self, agents, i):
+        assert agents[i] == self
         # Check if it is time to update
-        if t % self.update_interval != 0 or self.replay_buffer.get_size() < self.min_replay_size:
+        if self.replay_buffer.get_size() < self.min_replay_size:
             return None
         # Check for local_q parameter
         if self.local_q:
@@ -87,50 +130,55 @@ class MADDPGAgent(object):
         # Collate experiences
         global_obs = []
         global_actions = []
-        global_predicted_actions = []
         global_new_obs = []
-        global_target_actions = []
         for agent in agents:
             o, a, r, o_, d = list(
                 map(lambda x: T.tensor(x, dtype=T.float32, device=self.device), agent.get_experience(sampled_idx)))
             global_obs.append(o)
             global_actions.append(a)
             global_new_obs.append(o_)
-            global_predicted_actions.append(agent.pi(o))
-            global_target_actions.append(agent.pi_target(o_))
-        global_obs = T.cat(global_obs, 1)
-        global_predicted_actions = T.cat(global_predicted_actions, 1)
-        global_actions = T.cat(global_actions, 1)
-        global_new_obs = T.cat(global_new_obs, 1)
-        global_target_actions = T.cat(global_target_actions, 1)
 
         # Calculate target, actual Qs
-        q_input = T.cat([global_new_obs, global_target_actions], 1)
-        _, _, rew, _, done = self.get_experience(sampled_idx)
-        rew, done = list(map(lambda x: T.tensor(x, dtype=T.float32, device=self.device), [rew, done]))
-        actual = rew + self.gamma * (1 - done) * self.q_target(q_input)
+        all_target_acts = [onehot_from_logits(agent.pi(obs)) if self.discrete else agent.pi(obs) for agent, obs in zip(agents, global_new_obs)]
+        target_q_in = T.cat((*global_new_obs, *all_target_acts), 1)
+        obs, _, rew, _, done = self.get_experience(sampled_idx)
+        obs, rew, done = list(map(lambda x: T.tensor(x, dtype=T.float32, device=self.device), [obs, rew, done]))
+        with T.no_grad():
+            target_q_value = rew + self.gamma * (1 - done) * self.q_target(target_q_in)
         # Calculate predicted Qs
-        q_input = T.cat([global_obs, global_actions], 1)
-        predicted = self.q(q_input)
+        actual_q_in = T.cat((*global_obs, *global_actions), 1)
+        actual_q_value = self.q(actual_q_in)
         # Compute loss
-        loss = T.mean(T.pow(actual - predicted, 2))
-        info['q_loss'] = loss
+        q_loss = MSELoss(actual_q_value, target_q_value.detach())
+        info['q_loss'] = q_loss
         # Update gradients
         self.q_optimizer.zero_grad()
-        loss.backward()
+        q_loss.backward()
+        nn.utils.clip_grad_norm_(self.q.parameters(), 0.5)
         self.q_optimizer.step()
 
         # Update Pi network
-        q_input = T.cat([global_obs, global_predicted_actions], 1)
-        loss = -T.mean(self.q(q_input))
-        info['pi_loss'] = loss
+        if self.discrete:
+            pi_logits = self.pi(obs)
+            pi_act = gumbel_softmax(pi_logits, tau=self.tau, hard=True)
+        else:
+            pi_logits = self.pi(obs)
+            pi_act = pi_logits
+        all_pi_acts = []
+        for agent, o in zip(agents, global_obs):
+            if agent != self:
+                all_pi_acts.append(onehot_from_logits(agent.pi(o)) if self.discrete else agent.pi(o))
+            else:
+                all_pi_acts.append(pi_act)
+        q_in = T.cat((*global_obs, *all_pi_acts), 1)
+        pi_loss = -self.q(q_in).mean()
+        pi_loss += (pi_logits ** 2).mean() * 1e-3 # Regularization term
+        info['pi_loss'] = pi_loss
         # Update gradients
         self.pi_optimizer.zero_grad()
-        loss.backward()
+        pi_loss.backward()
+        nn.utils.clip_grad_norm_(self.pi.parameters(), 0.5)
         self.pi_optimizer.step()
-
-        # Perform soft update
-        self.soft_update(self.tau)
 
         return info
 
@@ -167,4 +215,16 @@ class MADDPGAgent(object):
         self.q_target.load_state_dict(T.load(target_q_path))
         self.q_target.eval()
 
-        self.soft_update(1.0)
+        self.hard_update()
+
+    def prep_training(self):
+        self.pi.train()
+        self.pi_target.train()
+        self.q.train()
+        self.q_target.train()
+
+    def prep_rollouts(self):
+        self.pi.eval()
+        self.pi_target.eval()
+        self.q.eval()
+        self.q_target.eval()

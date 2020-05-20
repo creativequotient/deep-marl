@@ -1,18 +1,23 @@
 import os
-import time
 
 import numpy as np
 import visdom
 
 from Agents import MADDPGAgent
-from Common import parse_args, make_env
+from Common import trainer_parse_args, make_env, make_dirs, setup_experiment_dir
 from Networks import MLP
-from RandomProcess import OrnsteinUhlenbeckActionNoise
 
-args = parse_args()
+args = trainer_parse_args()
 
 if not os.path.exists(args.save_dir):
     os.mkdir(args.save_dir)
+
+# Work in progress
+# if args.load_dir != "":
+#     scenario_dir = os.path.join('experiments', args.scenario, 'MADDPG')
+#     experimental_dir = setup_experiment_dir(scenario_dir)
+# else:
+#     experimental_dir = args.load_dir
 
 # Set-up environment
 env = make_env(args.scenario, args.benchmark)
@@ -32,10 +37,11 @@ agents = [MADDPGAgent(f'Agent {i}',
                       args.update_every,
                       env.observation_space[i].shape,
                       (env.action_space[i].n,),
+                      args.discrete,
                       env.observation_space,
                       env.action_space) for i in range(n_agents)]
 
-if args.load_dir is not "":
+if args.load_dir != "":
     for agent in agents:
         load_path = os.path.join(args.load_dir, agent.id)
         agent.load_agent(load_path)
@@ -44,30 +50,42 @@ if args.port > 0:
     viz = visdom.Visdom(port=args.port)
 
 update_counter = 1
-noise_processes = [OrnsteinUhlenbeckActionNoise(np.zeros(agents[i].act_shape)) for i in range(len(agents))]
 
 for episode in range(args.num_episodes):
     obs = env.reset()
     overall_reward = []
     visdom_info = {}
-    for process in noise_processes:
-        process.reset()
+    for agent in agents:
+        agent.reset_noise()
     for t in range(args.max_episode_len):
-        actions = [agents[i].get_action(obs[i])[0].cpu().detach().numpy() + noise_processes[i]() for i in
-                   range(len(agents))]
+        actions = [agent.get_action(o, noise=True)[0].cpu().detach().numpy() for agent, o in
+                   zip(agents, obs)]
         new_obs, rew, done, info = env.step(actions)
         for i, agent in enumerate(agents):
             agent.experience(obs[i], actions[i], rew[i], new_obs[i], done[i])
-        for agent in agents:
-            info = agent.update(agents, update_counter)
-            if info is not None:
-                if agent.id in visdom_info:
-                    visdom_info[agent.id]['q_loss'] += [info['q_loss'].detach().cpu().numpy()]
-                    visdom_info[agent.id]['pi_loss'] += [info['pi_loss'].detach().cpu().numpy()]
-                else:
-                    visdom_info[agent.id] = {}
-                    visdom_info[agent.id]['q_loss'] = [info['q_loss'].detach().cpu().numpy()]
-                    visdom_info[agent.id]['pi_loss'] = [info['pi_loss'].detach().cpu().numpy()]
+        if update_counter % args.update_every == 0:
+            for agent in agents:
+                agent.prep_training()
+            for i, agent in enumerate(agents):
+                info = agent.update(agents, i)
+                if info is not None:
+                    #     if False:
+                    #         print(
+                    #             f'Agent {i} Pi gradients: {agent.pi.fc1.weight.grad.mean()} '
+                    #             f'{agent.pi.fc2.weight.grad.mean()} {agent.pi.mu.weight.grad.mean()}')
+                    #         print(
+                    #             f'Agent {i} Q gradients: {agent.q.fc1.weight.grad.mean()} '
+                    #             f'{agent.q.fc2.weight.grad.mean()} {agent.q.mu.weight.grad.mean()}')
+                    if agent.id in visdom_info:
+                        visdom_info[agent.id]['q_loss'] += [info['q_loss'].detach().cpu().numpy()]
+                        visdom_info[agent.id]['pi_loss'] += [info['pi_loss'].detach().cpu().numpy()]
+                    else:
+                        visdom_info[agent.id] = {}
+                        visdom_info[agent.id]['q_loss'] = [info['q_loss'].detach().cpu().numpy()]
+                        visdom_info[agent.id]['pi_loss'] = [info['pi_loss'].detach().cpu().numpy()]
+            for agent in agents:
+                agent.soft_update(agent.tau)
+                agent.prep_rollouts()
         update_counter = (update_counter + 1) % args.update_every
         overall_reward.append(rew[0])
         obs = new_obs
@@ -103,9 +121,8 @@ for episode in range(args.num_episodes):
         for eval_episode in range(10):
             obs = env.reset()
             overall_reward = []
-
             for t in range(args.max_episode_len):
-                actions = [agents[i].get_target_action(obs[i])[0].cpu().detach().numpy() for i in range(len(agents))]
+                actions = [agents[i].get_action(obs[i], noise=False)[0].cpu().detach().numpy() for i in range(len(agents))]
                 new_obs, rew, done, info = env.step(actions)
                 overall_reward.append(rew[0])
                 obs = new_obs
@@ -113,9 +130,8 @@ for episode in range(args.num_episodes):
                     env.render()
                 if all(done):
                     break
-
             eval_rewards.append(sum(overall_reward))
-        print(f'Eval reward: {np.average(eval_rewards)}')
+        print(f'Episode: {episode} Eval reward: {np.average(eval_rewards)}')
         for agent in agents:
             save_path = os.path.join(args.save_dir, agent.id)
             if not os.path.exists(save_path):
@@ -130,16 +146,19 @@ for episode in range(args.num_episodes):
                 name='Evaluation',
                 opts=dict(title='Rewards', linecolor=np.array((255, 0, 0)).reshape(1, -1)))
 
-while True:
+# Evaluate
+eval_rewards = []
+for eval_episode in range(500):
     obs = env.reset()
     overall_reward = []
     for t in range(args.max_episode_len):
-        actions = [agents[i].get_target_action(obs[i])[0].cpu().detach().numpy() for i in range(len(agents))]
+        actions = [agents[i].get_action(obs[i])[0].cpu().detach().numpy() for i in range(len(agents))]
         new_obs, rew, done, info = env.step(actions)
         overall_reward.append(rew[0])
         obs = new_obs
         env.render()
-        time.sleep(0.02)
         if all(done):
             break
-    print(sum(overall_reward))
+    eval_rewards.append(sum(overall_reward))
+print(f'Average evaluation reward: {np.average(eval_rewards)}')
+print(f'Evaluation reward stdev: {np.std(eval_rewards)}')
