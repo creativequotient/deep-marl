@@ -36,7 +36,7 @@ class MLP(nn.Module):
         T.nn.init.uniform_(self.mu.weight.data, -f3, f3)
         T.nn.init.uniform_(self.mu.bias.data, -f3, f3)
 
-        if not discrete and not constrained:
+        if not discrete and constrained:
             self.activation = T.tanh
         else:
             self.activation = lambda x: x

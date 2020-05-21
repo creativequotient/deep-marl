@@ -96,7 +96,7 @@ class MADDPGAgent(object):
             else:
                 logits = self.pi(obs)
                 if noise:
-                    return gumbel_softmax(logits, tau=self.tau, hard=True)
+                    return gumbel_softmax(logits, hard=True)
                 else:
                     return onehot_from_logits(logits)
 
