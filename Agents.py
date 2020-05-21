@@ -67,14 +67,6 @@ class MADDPGAgent(object):
 
         self.prep_rollouts()
 
-        print(f"Agent ID: {self.id}")
-        print(f"Discrete: {self.discrete}")
-        print(f"Tau: {self.tau}")
-        print(f"LR: {self.lr}")
-        print(f"Gamma: {self.gamma}")
-        print(f"Batch size: {self.batch_size}")
-        print(f"Device: {self.device}")
-
     def experience(self, obs, act, rew, new_obs, done):
         self.replay_buffer.add(obs, act, rew, new_obs, done)
 
@@ -172,7 +164,7 @@ class MADDPGAgent(object):
                 all_pi_acts.append(pi_act)
         q_in = T.cat((*global_obs, *all_pi_acts), 1)
         pi_loss = -self.q(q_in).mean()
-        pi_loss += (pi_logits ** 2).mean() * 1e-3 # Regularization term
+        pi_loss += (pi_logits ** 2).mean() * 1e-3  # Regularization term
         info['pi_loss'] = pi_loss
         # Update gradients
         self.pi_optimizer.zero_grad()

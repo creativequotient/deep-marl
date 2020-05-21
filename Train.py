@@ -69,13 +69,6 @@ for episode in range(args.num_episodes):
             for i, agent in enumerate(agents):
                 info = agent.update(agents, i)
                 if info is not None:
-                    #     if False:
-                    #         print(
-                    #             f'Agent {i} Pi gradients: {agent.pi.fc1.weight.grad.mean()} '
-                    #             f'{agent.pi.fc2.weight.grad.mean()} {agent.pi.mu.weight.grad.mean()}')
-                    #         print(
-                    #             f'Agent {i} Q gradients: {agent.q.fc1.weight.grad.mean()} '
-                    #             f'{agent.q.fc2.weight.grad.mean()} {agent.q.mu.weight.grad.mean()}')
                     if agent.id in visdom_info:
                         visdom_info[agent.id]['q_loss'] += [info['q_loss'].detach().cpu().numpy()]
                         visdom_info[agent.id]['pi_loss'] += [info['pi_loss'].detach().cpu().numpy()]
