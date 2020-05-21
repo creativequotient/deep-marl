@@ -100,4 +100,4 @@ def onehot_from_logits(logits):
     output = np.zeros(logits.shape)
     for idx, entry in enumerate(logits):
         output[idx][np.argmax(entry)] = 1.0
-    return T.tensor(output, dtype=T.float32, device=T.device('cuda' if T.cuda.is_available() else 'cpu'))
+    return T.tensor(output, dtype=T.double, device=T.device('cuda' if T.cuda.is_available() else 'cpu'))

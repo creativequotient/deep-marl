@@ -1,4 +1,5 @@
 import os
+import time
 
 import numpy as np
 import visdom
@@ -141,7 +142,7 @@ for episode in range(args.num_episodes):
 
 # Evaluate
 eval_rewards = []
-for eval_episode in range(500):
+for eval_episode in range(20):
     obs = env.reset()
     overall_reward = []
     for t in range(args.max_episode_len):

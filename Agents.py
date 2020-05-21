@@ -78,19 +78,19 @@ class MADDPGAgent(object):
 
     def get_action(self, obs, noise=False):
         if type(obs) == np.ndarray:
-            obs = T.tensor(obs, dtype=T.float32, device=self.device).unsqueeze(0)
+            obs = T.tensor(obs, dtype=T.double, device=self.device).unsqueeze(0)
         with T.no_grad():
             if not self.discrete:
                 action = self.pi(obs)
                 if noise:
-                    action += T.tensor(self.noise(), dtype=T.float32, device=self.device).unsqueeze(0)
+                    action += T.tensor(self.noise(), dtype=T.double, device=self.device).unsqueeze(0)
                 return action.clamp(-1, 1)
             else:
                 logits = self.pi(obs)
                 if noise:
                     return gumbel_softmax(logits, hard=True)
                 else:
-                    return onehot_from_logits(logits)
+                    return gumbel_softmax(logits, hard=True)
 
     def get_experience(self, idx):
         return self.replay_buffer.get_experience(idx)
@@ -125,16 +125,16 @@ class MADDPGAgent(object):
         global_new_obs = []
         for agent in agents:
             o, a, r, o_, d = list(
-                map(lambda x: T.tensor(x, dtype=T.float32, device=self.device), agent.get_experience(sampled_idx)))
+                map(lambda x: T.tensor(x, dtype=T.double, device=self.device), agent.get_experience(sampled_idx)))
             global_obs.append(o)
             global_actions.append(a)
             global_new_obs.append(o_)
 
         # Calculate target, actual Qs
-        all_target_acts = [onehot_from_logits(agent.pi(obs)) if self.discrete else agent.pi(obs) for agent, obs in zip(agents, global_new_obs)]
+        all_target_acts = [gumbel_softmax(agent.pi(obs), hard=True) if self.discrete else agent.pi(obs) for agent, obs in zip(agents, global_new_obs)]
         target_q_in = T.cat((*global_new_obs, *all_target_acts), 1)
         obs, _, rew, _, done = self.get_experience(sampled_idx)
-        obs, rew, done = list(map(lambda x: T.tensor(x, dtype=T.float32, device=self.device), [obs, rew, done]))
+        obs, rew, done = list(map(lambda x: T.tensor(x, dtype=T.double, device=self.device), [obs, rew, done]))
         with T.no_grad():
             target_q_value = rew + self.gamma * (1 - done) * self.q_target(target_q_in)
         # Calculate predicted Qs
@@ -152,14 +152,14 @@ class MADDPGAgent(object):
         # Update Pi network
         if self.discrete:
             pi_logits = self.pi(obs)
-            pi_act = gumbel_softmax(pi_logits, tau=self.tau, hard=True)
+            pi_act = gumbel_softmax(pi_logits, hard=True)
         else:
             pi_logits = self.pi(obs)
             pi_act = pi_logits
         all_pi_acts = []
         for agent, o in zip(agents, global_obs):
             if agent != self:
-                all_pi_acts.append(onehot_from_logits(agent.pi(o)) if self.discrete else agent.pi(o))
+                all_pi_acts.append(gumbel_softmax(agent.pi(o), hard=True) if self.discrete else agent.pi(o))
             else:
                 all_pi_acts.append(pi_act)
         q_in = T.cat((*global_obs, *all_pi_acts), 1)

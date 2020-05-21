@@ -41,7 +41,7 @@ class MLP(nn.Module):
         else:
             self.activation = lambda x: x
 
-        self.to(device)
+        self.to(device, dtype=T.double)
 
     def forward(self, state):
         x = self.in_fn(state)
