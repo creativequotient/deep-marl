@@ -90,7 +90,8 @@ class MADDPGAgent(object):
                 if noise:
                     return gumbel_softmax(logits, hard=True)
                 else:
-                    return gumbel_softmax(logits, hard=True)
+                    return onehot_from_logits(logits)
+                    # return gumbel_softmax(logits, hard=True)
 
     def get_experience(self, idx):
         return self.replay_buffer.get_experience(idx)
@@ -131,7 +132,7 @@ class MADDPGAgent(object):
             global_new_obs.append(o_)
 
         # Calculate target, actual Qs
-        all_target_acts = [gumbel_softmax(agent.pi(obs), hard=True) if self.discrete else agent.pi(obs) for agent, obs in zip(agents, global_new_obs)]
+        all_target_acts = [onehot_from_logits(agent.pi(obs)) if self.discrete else agent.pi(obs) for agent, obs in zip(agents, global_new_obs)]
         target_q_in = T.cat((*global_new_obs, *all_target_acts), 1)
         obs, _, rew, _, done = self.get_experience(sampled_idx)
         obs, rew, done = list(map(lambda x: T.tensor(x, dtype=T.double, device=self.device), [obs, rew, done]))
@@ -159,7 +160,7 @@ class MADDPGAgent(object):
         all_pi_acts = []
         for agent, o in zip(agents, global_obs):
             if agent != self:
-                all_pi_acts.append(gumbel_softmax(agent.pi(o), hard=True) if self.discrete else agent.pi(o))
+                all_pi_acts.append(onehot_from_logits(agent.pi(o)) if self.discrete else agent.pi(o))
             else:
                 all_pi_acts.append(pi_act)
         q_in = T.cat((*global_obs, *all_pi_acts), 1)
