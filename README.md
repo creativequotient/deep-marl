@@ -11,8 +11,9 @@ AY2020/21 Sem 1/2 CP3209 UROP in Computing Project with Dr Jing Wei, IHPC.
 
 ## Medium Priority
 - [ ] Add support for `MultiBoxDiscrete` action space
-- [ ] Add saving and reloading mechanism
-- [ ] Add individual agent reward tracking
+- [x] Add individual agent reward tracking
 
 ## Low Priority
-- [ ] Restructure files to enable inclusion of other environments and types of algorithms
+- [x] Re-factorization of code into packages
+- [ ] Modify MPE code to provide benchmark statistics
+- [x] Document code
