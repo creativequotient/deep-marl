@@ -35,7 +35,7 @@ def evaluate(load_dir, eval_episodes, benchmark, display):
     obs_n = env.reset()
     episode_step = 0
 
-    print('Starting iterations...')
+    print('Starting evaluation...')
     while True:
         # collect agent actions
         action_n = [agent.get_action(o, explore=False) for agent, o in zip(agents, obs_n)]
@@ -78,7 +78,7 @@ def evaluate(load_dir, eval_episodes, benchmark, display):
         # render environment
         if display:
             time.sleep(0.03)
-            env.render()
+            env.render('human')
 
         # saves final episode reward for plotting training curve later
         if len(episode_rewards) > eval_episodes:
@@ -87,7 +87,7 @@ def evaluate(load_dir, eval_episodes, benchmark, display):
                 print("episodes: {}, mean episode reward: {}, std episode reward: {}".format(
                     len(episode_rewards), np.mean(episode_rewards), np.std(episode_rewards)))
             else:
-                print("episodes: {}, mean episode reward: {}, agent episode reward: {}".format(
+                print("episodes: {}, mean episode reward: {}, std episode reward: {}".format(
                     len(episode_rewards), np.mean(episode_rewards),
                     [np.mean(rew) for rew in agent_rewards],
                     [np.std(rew) for rew in agent_rewards]))

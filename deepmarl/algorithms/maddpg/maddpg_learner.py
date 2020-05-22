@@ -8,6 +8,7 @@ from torch.nn.functional import gumbel_softmax
 
 from deepmarl.common.random_process import OrnsteinUhlenbeckActionNoise
 from deepmarl.common.replay_buffer import ReplayBuffer
+from deepmarl.common.distributions import onehot_from_logits
 
 MSELoss = nn.MSELoss()
 
@@ -89,7 +90,7 @@ class MADDPGAgent(object):
                     out += T.tensor(self.noise(), dtype=T.double, device=self.device).unsqueeze(0)
                 return out.clamp(-1, 1)[0].cpu().numpy()
             else:
-                out = gumbel_softmax(out, hard=True)  # if explore else onehot_from_logits(out)
+                out = gumbel_softmax(out, hard=True) if explore else onehot_from_logits(out)
                 return out[0].cpu().numpy()
 
     def soft_update(self, amount):
