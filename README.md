@@ -8,11 +8,13 @@ AY2020/21 Sem 1/2 CP3209 UROP in Computing Project with Dr Jing Wei, IHPC.
 - [x] Add discrete action space output option via Gumbel-Softmax reparameterization trick
 - [x] Move noise parameter to inside the agent class
 - [x] Add support for individual good/bad agent policies
+- [ ] Implement M3DDPG algorithm
+- [ ] Implement policy estimation and esembling for MADDPG
 
 ## Medium Priority
 - [ ] Add support for `MultiBoxDiscrete` action space
 - [x] Add individual agent reward tracking
-- [ ] Experiment with additional normalization layers
+- [x] Experiment with additional normalization layers
 - [ ] Experiment with separate actor/critic networks
 
 ## Low Priority

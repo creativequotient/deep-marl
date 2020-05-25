@@ -10,11 +10,14 @@ from utils import eval_parse_args, make_env, make_dirs, get_learners
 
 # Evaluate
 def evaluate(load_dir, eval_episodes, benchmark, display):
+
     with open(os.path.join(load_dir, 'run_info.json'), 'r') as f:
         args = json.load(f)
 
     # Set-up environment
     env = make_env(args['scenario'], benchmark)
+
+    log_dir = os.path.join(load_dir, 'logs')
 
     # Set-up learners
     n_agents = len(env.observation_space)
@@ -67,7 +70,6 @@ def evaluate(load_dir, eval_episodes, benchmark, display):
             for i, info in enumerate(info_n):
                 agent_info[-1][i].append(info_n['n'])
             if len(episode_rewards) > args['num_episodes'] and (done or terminal):
-                log_dir = os.path.join(args['save_dir'], 'logs')
                 make_dirs(log_dir)
                 print('Finished benchmarking, now saving...')
                 with open(os.path.join(log_dir, 'benchmark_info.pkl'), 'wb') as fp:
@@ -91,7 +93,6 @@ def evaluate(load_dir, eval_episodes, benchmark, display):
                     len(episode_rewards), np.mean(episode_rewards),
                     [np.mean(rew) for rew in agent_rewards],
                     [np.std(rew) for rew in agent_rewards]))
-            log_dir = os.path.join(args['save_dir'], 'logs')
             with open(os.path.join(log_dir, 'eval_overall_rewards.pkl'), 'wb') as fp:
                 pickle.dump(episode_rewards, fp)
             with open(os.path.join(log_dir, 'eval_individual_rewards.pkl'), 'wb') as fp:
