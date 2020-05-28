@@ -38,7 +38,7 @@ class MADDPGAgent(object):
         self.num_units = args['num_units']
         self.obs_shape = obs_shape_n[agent_idx].shape
         if isinstance(act_shape_n[agent_idx], multiagent.multi_discrete.MultiDiscrete):
-            self.multi_discrete = act_shape_n[agent_idx].high - act_shape_n[agent_idx].low + 1
+            self.multi_discrete = list(act_shape_n[agent_idx].high - act_shape_n[agent_idx].low + 1)
             self.act_shape = (sum(self.multi_discrete),)
         else:
             self.act_shape = (act_shape_n[agent_idx].n,)  # only applies to discrete action space so far
@@ -71,7 +71,7 @@ class MADDPGAgent(object):
         else:
             if isinstance(act_shape_n[agent_idx], multiagent.multi_discrete.MultiDiscrete):
                 input_shape = sum(map(lambda x: x.shape[0], obs_shape_n)) + sum(
-                    map(lambda x: sum(x.high - x.low + 1), act_shape_n))
+                    map(lambda x: np.sum(x.high - x.low + 1), act_shape_n))
             else:
                 input_shape = sum(map(lambda x: x.shape[0], obs_shape_n)) + sum(
                 map(lambda x: x.n, act_shape_n))
@@ -103,7 +103,7 @@ class MADDPGAgent(object):
             elif self.multi_discrete:
                 out = out.split_with_sizes(self.multi_discrete, dim=-1)
                 out = list(map(lambda logits: gumbel_softmax(logits, hard=True) if explore else onehot_from_logits(logits), out))
-                return T.cat(out, dim=-1).cpu().numpy()
+                return T.cat(out, dim=-1)[0].cpu().numpy()
             else:
                 if explore:
                     out += T.tensor(self.noise(), dtype=T.double, device=self.device).unsqueeze(0)
@@ -179,18 +179,17 @@ class MADDPGAgent(object):
             out = out.split_with_sizes(agent.multi_discrete, dim=-1)
             out = list(map(lambda logits: gumbel_softmax(logits, hard=True), out))
             pi_act = T.cat(out, dim=-1)
+
         all_pi_acts = []
         for agent, o in zip(agents, global_obs):
             if agent != self:
                 if not self.multi_discrete:
                     all_pi_acts.append(gumbel_softmax(agent.pi(o), hard=True) if self.discrete else agent.pi(o))
                 else:
-                    all_pi_acts = []
-                    for agent, obs in zip(agents, global_new_obs):
-                        out = agent.pi(obs)
-                        out = out.split_with_sizes(agent.multi_discrete, dim=-1)
-                        out = list(map(lambda logits: gumbel_softmax(logits, hard=True), out))
-                        all_pi_acts.append(T.cat(out, dim=-1))
+                    out = agent.pi(obs)
+                    out = out.split_with_sizes(agent.multi_discrete, dim=-1)
+                    out = list(map(lambda x: gumbel_softmax(x, hard=True), out))
+                    all_pi_acts.append(T.cat(out, dim=-1))
             else:
                 all_pi_acts.append(pi_act)
 
