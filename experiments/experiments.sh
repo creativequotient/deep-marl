@@ -4,11 +4,11 @@
 
 cd simple_tag
 
-bash simple_tag.sh
+# bash simple_tag_exp.sh
 
 cd ../simple_push
 
-bash simple_push_exp.sh
+# bash simple_push_exp.sh
 
 cd ../simple_spread
 
@@ -20,15 +20,17 @@ bash simple_spread_exp.sh
 
 cd ../simple_speaker_listener
 
-bash simple_speaker_listener.sh
+bash simple_speaker_listener_exp.sh
 
 cd ../simple_tag_128_units
 
- simple_tag_exp.sh
+bash simple_tag_exp.sh
 
 cd ../simple_adversary
 
 bash simple_adversary_exp.sh
+
+cd ..
 
 # Run analysis
 

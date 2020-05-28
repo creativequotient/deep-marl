@@ -24,7 +24,7 @@ def trainer_parse_args():
     parser.add_argument("--num-units", type=int, default=64, help="number of units in the mlp")
     parser.add_argument("--discrete", action="store_true", default=False)
     # Checkpointing
-    parser.add_argument("--save-dir", type=str, default="/tmp/policy/",
+    parser.add_argument("--save-dir", type=str, default="tmp",
                         help="directory in which training state and model should be saved")
     parser.add_argument("--save-rate", type=int, default=1000,
                         help="save model once every time this many episodes are completed")
@@ -45,6 +45,7 @@ def eval_parse_args():
                         help="number of evaluation episodes")
     parser.add_argument("--benchmark", action="store_true", default=False)
     parser.add_argument("--display", action="store_true", default=False)
+    parser.add_argument("--save-gif", action="store_true", default=False)
 
     return parser.parse_args()
 

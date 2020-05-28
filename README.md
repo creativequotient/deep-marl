@@ -9,10 +9,11 @@ AY2020/21 Sem 1/2 CP3209 UROP in Computing Project with Dr Jing Wei, IHPC.
 - [x] Move noise parameter to inside the agent class
 - [x] Add support for individual good/bad agent policies
 - [ ] Implement M3DDPG algorithm
+- [x] Implement GIF saving for MPE
 - [ ] Implement policy estimation and esembling for MADDPG
 
 ## Medium Priority
-- [ ] Add support for `MultiBoxDiscrete` action space
+- [x] Add support for `MultiBoxDiscrete` action space
 - [x] Add individual agent reward tracking
 - [x] Experiment with additional normalization layers
 - [ ] Experiment with separate actor/critic networks

@@ -2,6 +2,8 @@ import json
 import os
 import pickle
 import time
+import pathlib
+import imageio
 
 import numpy as np
 
@@ -9,7 +11,7 @@ from utils import eval_parse_args, make_env, make_dirs, get_learners
 
 
 # Evaluate
-def evaluate(load_dir, eval_episodes, benchmark, display):
+def evaluate(load_dir, eval_episodes, benchmark, display, save_gif, fps=30):
 
     with open(os.path.join(load_dir, 'run_info.json'), 'r') as f:
         args = json.load(f)
@@ -18,6 +20,11 @@ def evaluate(load_dir, eval_episodes, benchmark, display):
     env = make_env(args['scenario'], benchmark)
 
     log_dir = os.path.join(load_dir, 'logs')
+
+    if save_gif:
+        gif_dir = os.path.join(load_dir, 'gifs')
+        pathlib.Path(gif_dir).mkdir(parents=True, exist_ok=True)
+        gif_frames = []
 
     # Set-up learners
     n_agents = len(env.observation_space)
@@ -52,6 +59,9 @@ def evaluate(load_dir, eval_episodes, benchmark, display):
             agent.experience(obs_n[i], action_n[i], rew_n[i], new_obs_n[i], done_n[i])
         # update environment
         obs_n = new_obs_n
+        # save gif
+        if save_gif:
+            gif_frames.append(env.render('rgb_array')[0])
 
         for i, rew in enumerate(rew_n):
             episode_rewards[-1] += rew
@@ -64,6 +74,13 @@ def evaluate(load_dir, eval_episodes, benchmark, display):
             for a in agent_rewards:
                 a.append(0)
             agent_info.append([[]])
+
+            if save_gif:
+                gif_num = 0
+                while os.path.exists(os.path.join(gif_dir, f'{gif_num}_{len(episode_rewards)}.gif')):
+                    gif_num += 1
+                imageio.mimsave(os.path.join(gif_dir, f'{gif_num}_{len(episode_rewards)}.gif'), gif_frames, duration=1/fps)
+                gif_frames = []
 
         # for benchmarking learned policies
         if benchmark:
@@ -93,10 +110,11 @@ def evaluate(load_dir, eval_episodes, benchmark, display):
                     len(episode_rewards), np.mean(episode_rewards),
                     [np.mean(rew) for rew in agent_rewards],
                     [np.std(rew) for rew in agent_rewards]))
-            with open(os.path.join(log_dir, 'eval_overall_rewards.pkl'), 'wb') as fp:
-                pickle.dump(episode_rewards, fp)
-            with open(os.path.join(log_dir, 'eval_individual_rewards.pkl'), 'wb') as fp:
-                pickle.dump(agent_rewards, fp)
+            if not display: # If --display flag is used, don't save anything
+                with open(os.path.join(log_dir, 'eval_overall_rewards.pkl'), 'wb') as fp:
+                    pickle.dump(episode_rewards, fp)
+                with open(os.path.join(log_dir, 'eval_individual_rewards.pkl'), 'wb') as fp:
+                    pickle.dump(agent_rewards, fp)
             break
 
 
