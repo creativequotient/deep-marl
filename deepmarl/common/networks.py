@@ -5,6 +5,9 @@ import torch.nn.functional as F
 
 
 class MLP(nn.Module):
+    """
+    Weight initialization similar to DDPG algorithm (Lowe et al.)
+    """
     def __init__(self, lr, input_shape, output_shape, discrete, constrained, device, num_units, norm_in=True):
         super(MLP, self).__init__()
         self.lr = lr
@@ -14,7 +17,7 @@ class MLP(nn.Module):
         self.output_shape = output_shape
         self.device = device
 
-        if norm_in:  # normalize inputs
+        if norm_in:  # Batch normalization of inputs
             self.in_fn = nn.BatchNorm1d(*self.input_shape)
             self.in_fn.weight.data.fill_(1)
             self.in_fn.bias.data.fill_(0)

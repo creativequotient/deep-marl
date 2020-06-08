@@ -1,5 +1,6 @@
 import json
 import os
+import pathlib
 import pickle
 import time
 
@@ -91,7 +92,7 @@ def train(args):
             # save agents
             for agent in agents:
                 save_path = os.path.join(args['save_dir'], 'models', agent.agent_name)
-                make_dirs(save_path)
+                pathlib.Path(save_path).mkdir(parents=True, exist_ok=True)
                 agent.save_agent(save_path)
             # print intermediate stats
             if num_adversaries == 0:
@@ -106,7 +107,7 @@ def train(args):
 
         if len(episode_rewards) > args['num_episodes']:
             log_dir = os.path.join(args['save_dir'], 'logs')
-            make_dirs(log_dir)
+            pathlib.Path(log_dir).mkdir(parents=True, exist_ok=True)
             with open(os.path.join(log_dir, 'overall_rewards.pkl'), 'wb') as fp:
                 pickle.dump(episode_rewards, fp)
             with open(os.path.join(log_dir, 'individual_rewards.pkl'), 'wb') as fp:

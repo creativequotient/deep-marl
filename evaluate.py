@@ -1,10 +1,10 @@
 import json
 import os
+import pathlib
 import pickle
 import time
-import pathlib
-import imageio
 
+import imageio
 import numpy as np
 
 from utils import eval_parse_args, make_env, make_dirs, get_learners
@@ -12,7 +12,6 @@ from utils import eval_parse_args, make_env, make_dirs, get_learners
 
 # Evaluate
 def evaluate(load_dir, eval_episodes, benchmark, display, save_gif, fps=30):
-
     with open(os.path.join(load_dir, 'run_info.json'), 'r') as f:
         args = json.load(f)
 
@@ -79,7 +78,8 @@ def evaluate(load_dir, eval_episodes, benchmark, display, save_gif, fps=30):
                 gif_num = 0
                 while os.path.exists(os.path.join(gif_dir, f'{gif_num}_{len(episode_rewards)}.gif')):
                     gif_num += 1
-                imageio.mimsave(os.path.join(gif_dir, f'{gif_num}_{len(episode_rewards)}.gif'), gif_frames, duration=1/fps)
+                imageio.mimsave(os.path.join(gif_dir, f'{gif_num}_{len(episode_rewards)}.gif'), gif_frames,
+                                duration=1 / fps)
                 gif_frames = []
 
         # for benchmarking learned policies
@@ -110,7 +110,7 @@ def evaluate(load_dir, eval_episodes, benchmark, display, save_gif, fps=30):
                     len(episode_rewards), np.mean(episode_rewards),
                     [np.mean(rew) for rew in agent_rewards],
                     [np.std(rew) for rew in agent_rewards]))
-            if not display: # If --display flag is used, don't save anything
+            if not display:  # If --display flag is used, don't save anything
                 with open(os.path.join(log_dir, 'eval_overall_rewards.pkl'), 'wb') as fp:
                     pickle.dump(episode_rewards, fp)
                 with open(os.path.join(log_dir, 'eval_individual_rewards.pkl'), 'wb') as fp:

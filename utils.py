@@ -1,7 +1,8 @@
 import argparse
 import os
 
-from deepmarl.algorithms.maddpg.maddpg_learner import MADDPGAgent
+from deepmarl.algorithms.maddpg import MADDPGAgent
+from deepmarl.algorithms.m3ddpg import M3DDPGAgent
 from deepmarl.common.networks import MLP
 
 
@@ -22,9 +23,10 @@ def trainer_parse_args():
     parser.add_argument("--buffer-size", type=int, default=1e6, help="replay buffer size")
     parser.add_argument("--update-interval", type=int, default=100, help="update interval")
     parser.add_argument("--num-units", type=int, default=64, help="number of units in the mlp")
+    parser.add_argument("--perturbation", type=float, default=0.0, help="perturbation factor(s)")
     parser.add_argument("--discrete", action="store_true", default=False)
     # Checkpointing
-    parser.add_argument("--save-dir", type=str, default="tmp",
+    parser.add_argument("--save-dir", type=str, default="/tmp/policy",
                         help="directory in which training state and model should be saved")
     parser.add_argument("--save-rate", type=int, default=1000,
                         help="save model once every time this many episodes are completed")
@@ -33,7 +35,9 @@ def trainer_parse_args():
     # Evaluation
     parser.add_argument("--display", action="store_true", default=False)
 
-    return parser.parse_args()
+    output = parser.parse_args()
+
+    return output
 
 
 def eval_parse_args():
@@ -77,15 +81,24 @@ def make_dirs(path):
 
 
 def get_learners(env, num_adversaries, arglist, model=MLP):
-    # (self, agent_name, agent_idx, model, obs_shape_n, act_shape_n, args):
     learners = []
-    learner = MADDPGAgent
+    if arglist['good_policy'] == 'm3ddpg' or arglist['adv_policy'] == 'm3ddpg':
+        perturbation_factors = [arglist['perturbation']] * env.n
+        print(perturbation_factors)
     for i in range(num_adversaries):
-        learners.append(learner(
-            "agent_%d" % i, i, model, env.observation_space, env.action_space, arglist,
-            local_q=(arglist['adv_policy'] == 'ddpg')))
+        if arglist['adv_policy'] == 'm3ddpg':
+            learners.append(M3DDPGAgent(
+                "agent_%d" % i, i, model, env.observation_space, env.action_space, arglist, perturbation_factors))
+        else:
+            learners.append(MADDPGAgent(
+                "agent_%d" % i, i, model, env.observation_space, env.action_space, arglist,
+                local_q=(arglist['adv_policy'] == 'ddpg')))
     for i in range(num_adversaries, env.n):
-        learners.append(learner(
-            "agent_%d" % i, i, model, env.observation_space, env.action_space, arglist,
-            local_q=(arglist['good_policy'] == 'ddpg')))
+        if arglist['good_policy'] == 'm3ddpg':
+            learners.append(M3DDPGAgent(
+                "agent_%d" % i, i, model, env.observation_space, env.action_space, arglist, perturbation_factors))
+        else:
+            learners.append(MADDPGAgent(
+                "agent_%d" % i, i, model, env.observation_space, env.action_space, arglist,
+                local_q=(arglist['adv_policy'] == 'ddpg')))
     return learners

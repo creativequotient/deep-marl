@@ -1,15 +1,16 @@
 import os
+import pathlib
 
+import multiagent
 import numpy as np
 import torch as T
 import torch.nn as nn
 import torch.optim as optim
 from torch.nn.functional import gumbel_softmax
-import multiagent
 
+from deepmarl.common.distributions import onehot_from_logits
 from deepmarl.common.random_process import OrnsteinUhlenbeckActionNoise
 from deepmarl.common.replay_buffer import ReplayBuffer
-from deepmarl.common.distributions import onehot_from_logits
 
 MSELoss = nn.MSELoss()
 
@@ -41,7 +42,7 @@ class MADDPGAgent(object):
             self.multi_discrete = list(act_shape_n[agent_idx].high - act_shape_n[agent_idx].low + 1)
             self.act_shape = (sum(self.multi_discrete),)
         else:
-            self.act_shape = (act_shape_n[agent_idx].n,)  # only applies to discrete action space so far
+            self.act_shape = (act_shape_n[agent_idx].n,)
 
         # ReplayBuffer
         self.min_replay_size = args['batch_size'] * args['max_episode_len']
@@ -74,7 +75,7 @@ class MADDPGAgent(object):
                     map(lambda x: np.sum(x.high - x.low + 1), act_shape_n))
             else:
                 input_shape = sum(map(lambda x: x.shape[0], obs_shape_n)) + sum(
-                map(lambda x: x.n, act_shape_n))
+                    map(lambda x: x.n, act_shape_n))
         self.q = model(self.lr, (input_shape,), (1,), self.discrete, False, self.device, self.num_units)
         self.q_target = model(self.lr, (input_shape,), (1,), self.discrete, False, self.device, self.num_units)
         self.q_optimizer = optim.Adam(self.q.parameters(), lr=self.lr)
@@ -97,15 +98,17 @@ class MADDPGAgent(object):
             obs = T.tensor(obs[None], dtype=T.double, device=self.device)
         with T.no_grad():
             out = self.pi(obs)
-            if self.discrete and not self.multi_discrete:
+            if self.discrete and not self.multi_discrete:  # Discrete action space
                 out = gumbel_softmax(out, hard=True) if explore else onehot_from_logits(out)
                 return out[0].cpu().numpy()
-            elif self.multi_discrete:
+            elif self.multi_discrete:  # Multi-discrete action space
                 out = out.split_with_sizes(self.multi_discrete, dim=-1)
-                out = list(map(lambda logits: gumbel_softmax(logits, hard=True) if explore else onehot_from_logits(logits), out))
+                out = list(
+                    map(lambda logits: gumbel_softmax(logits, hard=True) if explore else onehot_from_logits(logits),
+                        out))
                 return T.cat(out, dim=-1)[0].cpu().numpy()
-            else:
-                if explore:
+            else:  # Continuous action space
+                if explore:  # Add OUNoise to actions if needed
                     out += T.tensor(self.noise(), dtype=T.double, device=self.device).unsqueeze(0)
                 return out.clamp(-1, 1)[0].cpu().numpy()
 
@@ -125,29 +128,33 @@ class MADDPGAgent(object):
         # Check if it is time to update
         if self.replay_buffer.get_size() < self.min_replay_size:
             return None
+
         # Check for local_q parameter
         if self.local_q:
             agents = [self]
 
         # Update Q function
         sampled_idx = self.replay_buffer.make_index(self.batch_size)
+
         # Collate experiences
         global_obs = []
         global_actions = []
         global_new_obs = []
         for agent in agents:
-            o, a, r, o_, d = list(
-                map(lambda x: T.tensor(x, dtype=T.double, device=self.device),
-                    agent.replay_buffer.sample_index(sampled_idx)))
+            o, a, _, o_, _ = agent.replay_buffer.sample_index(sampled_idx)
+            o, a, o_ = list(map(lambda x: T.tensor(x, dtype=T.double, device=self.device),
+                                [o, a, o_]))  # Convert all to tensors first
             global_obs.append(o)
             global_actions.append(a)
             global_new_obs.append(o_)
 
-        # Calculate target, actual Qs
-        if not self.multi_discrete:
-            all_target_acts = [gumbel_softmax(agent.pi_target(obs), hard=True) if self.discrete else agent.pi_target(obs) for agent, obs
-                           in zip(agents, global_new_obs)]
-        else:
+        # Update Q-network
+        if not self.multi_discrete:  # Continous or discrete actions
+            all_target_acts = [
+                gumbel_softmax(agent.pi_target(obs), hard=True) if self.discrete else agent.pi_target(obs) for
+                agent, obs
+                in zip(agents, global_new_obs)]
+        else:  # Multi-discrete actions
             all_target_acts = []
             for agent, obs in zip(agents, global_new_obs):
                 out = agent.pi_target(obs)
@@ -157,12 +164,13 @@ class MADDPGAgent(object):
         target_q_in = T.cat((*global_new_obs, *all_target_acts), 1)
         obs, _, rew, _, done = self.replay_buffer.sample_index(sampled_idx)
         obs, rew, done = list(map(lambda x: T.tensor(x, dtype=T.double, device=self.device), [obs, rew, done]))
+        # Calculate target q-values
         with T.no_grad():
             target_q_value = rew + self.gamma * (1 - done) * self.q_target(target_q_in)
-        # Calculate predicted Qs
+        # Calculate predicted q-values
         actual_q_in = T.cat((*global_obs, *global_actions), 1)
         actual_q_value = self.q(actual_q_in)
-        # Compute loss
+        # Compute MSE loss
         q_loss = MSELoss(actual_q_value, target_q_value.detach())
         # Update gradients
         self.q_optimizer.zero_grad()
@@ -171,15 +179,15 @@ class MADDPGAgent(object):
         self.q_optimizer.step()
 
         # Update Pi network
-        pi_logits = self.pi(obs)
-        if not self.multi_discrete:
+        pi_logits = self.pi(obs)  # Obtain logits for regularization term
+        if not self.multi_discrete:  # Discrete or continous actions
             pi_act = gumbel_softmax(pi_logits, hard=True) if self.discrete else pi_logits
-        else:
+        else:  # Multi-discrete actions
             out = self.pi(obs)
             out = out.split_with_sizes(agent.multi_discrete, dim=-1)
             out = list(map(lambda logits: gumbel_softmax(logits, hard=True), out))
             pi_act = T.cat(out, dim=-1)
-
+        # Obtain actions from all other agents
         all_pi_acts = []
         for agent, o in zip(agents, global_obs):
             if agent != self:
@@ -192,8 +200,6 @@ class MADDPGAgent(object):
                     all_pi_acts.append(T.cat(out, dim=-1))
             else:
                 all_pi_acts.append(pi_act)
-
-
         q_in = T.cat((*global_obs, *all_pi_acts), 1)
         pi_loss = -self.q(q_in).mean()
         pi_loss += (pi_logits ** 2).mean() * 1e-3  # Regularization term
@@ -206,8 +212,7 @@ class MADDPGAgent(object):
         return q_loss.cpu().detach().numpy(), pi_loss.cpu().detach().numpy()
 
     def save_agent(self, save_path):
-        if not os.path.exists(save_path):
-            os.mkdir(save_path)
+        pathlib.Path(save_path).mkdir(parents=True, exist_ok=True)
 
         target_pi_path = os.path.join(save_path, "target_pi_network.pth")
         T.save(self.pi_target.state_dict(), target_pi_path)
