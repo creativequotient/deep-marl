@@ -100,5 +100,5 @@ def get_learners(env, num_adversaries, arglist, model=MLP):
         else:
             learners.append(MADDPGAgent(
                 "agent_%d" % i, i, model, env.observation_space, env.action_space, arglist,
-                local_q=(arglist['adv_policy'] == 'ddpg')))
+                local_q=(arglist['good_policy'] == 'ddpg')))
     return learners
