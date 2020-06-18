@@ -51,7 +51,7 @@ def train(args):
         new_obs_n, rew_n, done_n, info_n = env.step(action_n)
         episode_step += 1
         done = all(done_n)
-        terminal = (episode_step >= args['max_episode_len'])
+        terminal = (episode_step >= args['max_episode_len'])    
         # collect experiences
         for i, agent in enumerate(agents):
             agent.experience(obs_n[i], action_n[i], rew_n[i], new_obs_n[i], done_n[i])
