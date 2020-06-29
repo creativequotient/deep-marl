@@ -1,0 +1,8 @@
+---
+learning_rate: 0.01
+discount_factor: 0.95
+polyak: 0.99
+batch_size: 1024
+buffer_size: 1000000
+update_interval: 100
+hidden_units: 64

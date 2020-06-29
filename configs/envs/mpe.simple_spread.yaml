@@ -1,0 +1,4 @@
+---
+scenario: mpe.simple_spread
+episode_len: 25
+masking: False

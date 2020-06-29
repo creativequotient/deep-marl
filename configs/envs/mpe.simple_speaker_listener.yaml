@@ -1,0 +1,4 @@
+---
+scenario: mpe.simple_speaker_listener
+episode_len: 25
+masking: False
