@@ -80,11 +80,11 @@ class MADDPG_Learner(object):
         target_act_n = self.controller.step(next_obs_n, avail_n, explore=True, target=True)
 
         if not self.local_q:
-            target_q_in = T.cat([*next_states, *next_obs_n, *target_act_n], dim=-1)
-            q_in = T.cat([*states, *obs_n, *act_n], dim=-1)
+            target_q_in = T.cat([next_states, *next_obs_n, *target_act_n], dim=-1)
+            q_in = T.cat([states, *obs_n, *act_n], dim=-1)
         else:
-            target_q_in = T.cat([*next_states, next_obs_n[self.agent_idx], *target_act_n[self.agent_idx]], dim=-1)
-            q_in = T.cat([*states, obs_n[self.agent_idx], act_n[self.agent_idx]], dim=-1)
+            target_q_in = T.cat([next_states, next_obs_n[self.agent_idx], *target_act_n[self.agent_idx]], dim=-1)
+            q_in = T.cat([states, obs_n[self.agent_idx], act_n[self.agent_idx]], dim=-1)
 
         with T.no_grad():
             target_q = rew.view(-1,1) + self.discount_factor * (1 - done).view(-1,1) * self.target_critic(target_q_in)
@@ -100,9 +100,9 @@ class MADDPG_Learner(object):
         # update actor network (policy-network)
         act_n, logits_n = self.controller.step(obs_n, next_avail_n, explore=True, provide_logits=True)
         if not self.local_q:
-            q_in = T.cat([*states, *obs_n, *act_n], dim=-1)
+            q_in = T.cat([states, *obs_n, *act_n], dim=-1)
         else:
-            q_in = T.cat([*states, obs_n[self.agent_idx], act_n[self.agent_idx]], dim=-1)
+            q_in = T.cat([states, obs_n[self.agent_idx], act_n[self.agent_idx]], dim=-1)
         pi_loss = -self.critic(q_in).mean() + (logits_n[self.agent_idx] ** 2).mean() * 1e-3
         self.actor_optimiser.zero_grad()
         pi_loss.backward()

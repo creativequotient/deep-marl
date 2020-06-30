@@ -6,6 +6,7 @@ import logging
 import time
 import numpy as np
 import torch as T
+import pickle
 
 from wrappers import REGISTRY as env_registry
 from controllers.basic_controller import BasicController
@@ -97,3 +98,9 @@ def run(configs):
                     timestep, len(episode_rewards) - 1, np.mean(episode_rewards[-1000:]),
                     round(time.time() - t_start, 3)))
             t_start = time.time()
+
+    with open(f'{experimental_dir}/episode_rewards.pkl') as f:
+        pickle.dump(episode_rewards, f)
+
+    with open(f'{experimental_dir}/agent_rewards.pkl') as f:
+        pickle.dump(agent_rewards, f)

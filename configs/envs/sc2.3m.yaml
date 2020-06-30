@@ -1,4 +1,4 @@
 ---
 scenario: sc2.3m
-episode_len: 25
+episode_len: 40
 masking: True
